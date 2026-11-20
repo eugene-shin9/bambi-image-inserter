@@ -1,0 +1,5 @@
+onnxruntime-web 1.17.3
+Copyright (c) Microsoft Corporation
+Licensed under the MIT License (https://github.com/microsoft/onnxruntime/blob/main/LICENSE).
+
+Bundled in bgremoval.mjs: lodash, ndarray, zod (MIT).

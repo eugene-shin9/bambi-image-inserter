@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' blob: data:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>이미지 삽입기</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2212%22 fill=%22none%22 stroke=%22%23c8203a%22 stroke-width=%225%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/pdf-lib.min.js" defer></script>
+<script src="vendor/jszip.min.js" defer></script>
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><b>이미지 삽입기</b><span class="fname" id="fname"></span></div>
+  <div class="tools">
+    <label class="btn" title="문서 열기"><input type="file" id="docInput" accept=".pdf,.xlsx,.xlsm,.hwp,.hwpx" hidden>문서 열기</label>
+    <span class="sep"></span>
+    <button class="btn icon" id="undoBtn" title="실행 취소 (Ctrl+Z)" disabled>↶</button>
+    <button class="btn icon" id="redoBtn" title="다시 실행 (Ctrl+Shift+Z)" disabled>↷</button>
+    <span class="sep"></span>
+    <button class="btn icon" id="zoomOut" title="축소">−</button>
+    <button class="btn zoomv" id="zoomFit" title="폭에 맞추기">100%</button>
+    <button class="btn icon" id="zoomIn" title="확대">+</button>
+    <span class="sep"></span>
+    <label class="chk" title="끄면 자유 배치 (Alt 키를 누르고 끌어도 해제)"><input type="checkbox" id="snapOn" checked>스마트 가이드</label>
+    <button class="btn primary" id="saveBtn" disabled>저장</button>
+  </div>
+</header>
+
+<div class="tabs" id="sheetTabs" hidden></div>
+<div class="notice" id="notice" hidden></div>
+
+<main class="work">
+  <section class="viewer" id="viewer" tabindex="-1">
+    <div class="empty" id="empty">
+      <div class="drop">
+        <div class="doc-ill" aria-hidden="true"><i></i><i></i><i></i><span class="stamp"></span></div>
+        <h1>문서에 도장·서명·사진을 얹어 그대로 저장</h1>
+        <p>PDF · 엑셀(XLSX) · 한글(HWP · HWPX) 파일을 여기에 끌어다 놓거나</p>
+        <label class="btn primary big"><input type="file" id="docInput2" accept=".pdf,.xlsx,.xlsm,.hwp,.hwpx" hidden>문서 선택</label>
+        <ul class="facts">
+          <li>파일은 이 브라우저 안에서만 처리되고 어디에도 전송되지 않습니다.</li>
+          <li>저장하면 올린 형식 그대로(PDF→PDF, HWP→HWP …) 내려받습니다.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="pages" id="pages"></div>
+  </section>
+
+  <aside class="panel" id="panel">
+    <div class="psec">
+      <div class="phead"><h2>이미지</h2>
+        <label class="btn sm"><input type="file" id="imgInput" accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg" multiple hidden>+ 추가</label>
+      </div>
+      <p class="hint" id="libHint">이미지를 추가한 뒤 문서 위로 끌어다 놓거나 「넣기」를 누르세요.</p>
+      <div class="lib" id="lib"></div>
+    </div>
+    <div class="psec" id="propSec" hidden>
+      <div class="phead"><h2>선택한 이미지</h2><span class="where" id="where"></span></div>
+      <div class="preview checker" id="preview"><canvas id="prevCanvas"></canvas><div class="busy" id="busy" hidden></div></div>
+      <label class="row big-chk"><input type="checkbox" id="cutOn"> <b>누끼 따기</b><span class="muted">(배경 지우기)</span></label>
+      <div id="cutOpts" hidden>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="cutMode" value="solid" checked><span>단색 배경<small>도장·서명·로고</small></span></label>
+          <label><input type="radio" name="cutMode" value="ai"><span>AI<small>사진·복잡한 배경</small></span></label>
+        </div>
+        <div id="solidOpts">
+          <div class="row"><span class="lab">배경색</span><span class="sw" id="bgSw"></span>
+            <button class="btn sm" id="pickBtn" title="미리보기에서 배경 부분을 누르세요">스포이드</button>
+            <button class="btn sm ghost" id="autoBg">자동</button></div>
+          <label class="row"><span class="lab">지우는 정도</span><input type="range" id="thr" min="0" max="100" value="35"></label>
+          <label class="row"><span class="lab">가장자리</span><input type="range" id="soft" min="0" max="100" value="30"></label>
+        </div>
+        <p class="hint" id="aiHint" hidden>처음 한 번 AI 모델(약 45MB)을 내려받습니다. 처리 시간은 기기 성능에 따라 수 초~수십 초 걸립니다.</p>
+      </div>
+      <div class="row size">
+        <label>가로 <input type="number" id="wMm" min="1" step="0.5"> mm</label>
+        <label>세로 <input type="number" id="hMm" min="1" step="0.5"> mm</label>
+        <label class="chk" title="비율 유지"><input type="checkbox" id="lockAr" checked>비율</label>
+      </div>
+      <div class="row acts">
+        <button class="btn sm" id="dupBtn">복제</button>
+        <button class="btn sm" id="centerBtn">쪽 가운데</button>
+        <button class="btn sm danger" id="delBtn">삭제</button>
+      </div>
+      <p class="hint keys">끌기: 이동 · 모서리: 크기 · 화살표: 1px 이동(Shift 10px) · Alt+끌기: 가이드 무시</p>
+    </div>
+    <footer class="pfoot"><a href="https://github.com/eugene-shin9/bambi-image-inserter" rel="noopener">소스·라이선스</a></footer>
+  </aside>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="modal" id="modal" hidden><div class="mbox"><p id="mtext"></p><div class="mbtns" id="mbtns"></div></div></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
