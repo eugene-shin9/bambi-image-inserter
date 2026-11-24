@@ -16,15 +16,17 @@ function toast(msg, ms = 2600) {
 }
 function modal(text, buttons = [{ label: '확인', value: true, primary: true }]) {
   return new Promise(res => {
+    const back = document.activeElement;
     $('mtext').textContent = text;
     const box = $('mbtns'); box.innerHTML = '';
     for (const b of buttons) {
       const el = document.createElement('button');
       el.className = 'btn' + (b.primary ? ' primary' : '');
       el.textContent = b.label;
-      el.onclick = () => { $('modal').hidden = true; res(b.value); };
+      el.onclick = () => { $('modal').hidden = true; $('modal').onkeydown = null; if (back && back.focus) back.focus(); res(b.value); };
       box.appendChild(el);
     }
+    $('modal').onkeydown = e => { if (e.key === 'Escape') { e.preventDefault(); box.firstChild.click(); } };
     $('modal').hidden = false; box.lastChild.focus();
   });
 }
@@ -65,14 +67,14 @@ function buildTabs() {
   const t = $('sheetTabs'); t.innerHTML = ''; t.hidden = false;
   S.A.sheets.forEach((s, i) => {
     if (s.hidden) return;
-    const b = document.createElement('button'); b.textContent = s.name; b.dataset.i = i;
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.i = i; b.setAttribute('aria-pressed', 'false');
     b.onclick = () => showSheet(i); t.appendChild(b);
   });
 }
 async function showSheet(i) {
   S.sheet = i; const p = await S.A.loadSheetPage(i);
   S.view = [{ idx: i, w: p.w, h: p.h }];
-  for (const b of $('sheetTabs').children) b.classList.toggle('on', +b.dataset.i === i);
+  for (const b of $('sheetTabs').children) { b.classList.toggle('on', +b.dataset.i === i); b.setAttribute('aria-pressed', String(+b.dataset.i === i)); }
   if (S.sel && itemById(S.sel)?.page !== i) S.sel = null;
   showNotice(S.A.warnings); fitZoom(); buildPages(); updatePanel();
 }
@@ -149,6 +151,8 @@ function renderLib() {
     const d = document.createElement('div'); d.className = 'li checker'; d.draggable = true; d.title = img.name;
     d.innerHTML = `<img alt=""><div class="lact"><button class="btn sm" data-a="put">넣기</button><button class="btn sm ghost" data-a="rm" title="목록에서 빼기">✕</button></div>${img.cut.on ? '<span class="tag">누끼</span>' : ''}`;
     d.querySelector('img').src = img.url;
+    d.querySelector('[data-a=put]').setAttribute('aria-label', `${img.name} 문서에 넣기`);
+    d.querySelector('[data-a=rm]').setAttribute('aria-label', `${img.name} 목록에서 빼기`);
     d.addEventListener('dragstart', e => { e.dataTransfer.setData('text/x-img', img.id); e.dataTransfer.effectAllowed = 'copy'; });
     d.querySelector('[data-a=put]').onclick = () => { if (!S.A) return toast('먼저 문서를 여세요.'); placeImage(img.id); };
     d.querySelector('[data-a=rm]').onclick = async () => {
@@ -202,6 +206,8 @@ function renderItems() {
       const d = document.createElement('div'); d.className = 'item' + (it.id === S.sel ? ' sel' : ''); d.dataset.id = it.id;
       d.innerHTML = `<img alt="" draggable="false">${it.id === S.sel ? '<i class="h" data-c="nw"></i><i class="h" data-c="ne"></i><i class="h" data-c="sw"></i><i class="h" data-c="se"></i>' : ''}`;
       d.querySelector('img').src = img.url;
+      d.tabIndex = 0; d.setAttribute('role', 'button'); d.setAttribute('aria-label', `${img.name} · 방향키로 이동, Delete로 삭제`);
+      d.addEventListener('focus', () => { if (S.sel === it.id) return; S.sel = it.id; renderItems(); updatePanel(); document.querySelector(`.item[data-id="${it.id}"]`)?.focus(); });
       posItem(d, it); ov.appendChild(d);
     }
   }
